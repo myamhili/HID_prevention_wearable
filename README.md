@@ -6,6 +6,11 @@ A comprehensive system designed to monitor patient activity and environmental fa
 
 This project was developed as a collaborative effort by Hyunsung Jo, Deacon Sham, Koen Knerr, and Garry Sun. 
 
+* **Hyunsung Jo** 
+* **Deacon Sham** ((https://www.linkedin.com/in/deacon-sham/))
+* **Koen Knerr** ((https://www.linkedin.com/in/koen-knerr-31914b382/))
+* **Garry Sun** ((https://www.linkedin.com/in/gary-s-sun/)) 
+
 *Note: The original repository hosted by my co-creator can be found [here](https://github.com/deaconsham/delirium-prevention-wearable).*
 
 
