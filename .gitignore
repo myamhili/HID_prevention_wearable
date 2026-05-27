@@ -1,0 +1,35 @@
+# Node.js / Frontend
+node_modules
+dist
+.npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python / Backend
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+pip-wheel-metadata/
+.eggs/
+
+# OS / Editor specific
+.DS_Store
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Custom Model Files
+# Ignore patient-specific models, but keep the default 'test' model.
+*_model.pth
+*_scaler.joblib
+!test_model.pth
+!test_scaler.joblib
