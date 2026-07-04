@@ -92,7 +92,7 @@ HAL_StatusTypeDef lcd_init(I2C_HandleTypeDef *hi2c)
     return status;
 }
 
-void lcd_send_string(char *str)
+void lcd_send_string(const char *str)
 {
     while (*str)
     {

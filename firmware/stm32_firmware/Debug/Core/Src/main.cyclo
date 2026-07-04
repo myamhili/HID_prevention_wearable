@@ -1,6 +1,11 @@
-../Core/Src/main.c:83:5:main	5
-../Core/Src/main.c:162:6:SystemClock_Config	3
-../Core/Src/main.c:205:6:sendSensorData	2
-../Core/Src/main.c:229:6:parseCommand	6
-../Core/Src/main.c:265:6:HAL_UART_RxCpltCallback	6
-../Core/Src/main.c:293:6:Error_Handler	1
+../Core/Src/main.c:72:5:main	6
+../Core/Src/main.c:148:6:SystemClock_Config	3
+../Core/Src/main.c:191:13:sendSensorData	4
+../Core/Src/main.c:226:13:parseCommand	7
+../Core/Src/main.c:293:13:sendUartString	1
+../Core/Src/main.c:298:16:clampRgbValue	3
+../Core/Src/main.c:311:13:showStartupScreen	1
+../Core/Src/main.c:321:13:lcdSendLine	4
+../Core/Src/main.c:334:13:busyWait	2
+../Core/Src/main.c:342:6:HAL_UART_RxCpltCallback	11
+../Core/Src/main.c:385:6:Error_Handler	1

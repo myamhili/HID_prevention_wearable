@@ -42,7 +42,7 @@ HAL_StatusTypeDef lcd_send_data(char data);
   * @param  str: Pointer to the string to display.
   * @retval None
   */
-void lcd_send_string(char *str);
+void lcd_send_string(const char *str);
 
 /**
   * @brief  Clears the LCD display.

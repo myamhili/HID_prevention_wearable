@@ -60,8 +60,8 @@ all: main-build
 main-build: Delirium-Preventable-Wearable.elf secondary-outputs
 
 # Tool invocations
-Delirium-Preventable-Wearable.elf Delirium-Preventable-Wearable.map: $(OBJS) $(USER_OBJS) /Users/deaconsham/STM32CubeIDE/workspace_1.19.0/Delirium-Preventable-Wearable/STM32F401RETX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "Delirium-Preventable-Wearable.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"/Users/deaconsham/STM32CubeIDE/workspace_1.19.0/Delirium-Preventable-Wearable/STM32F401RETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Delirium-Preventable-Wearable.map" -Wl,--gc-sections -static -u _printf_float --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Delirium-Preventable-Wearable.elf Delirium-Preventable-Wearable.map: $(OBJS) $(USER_OBJS) ../STM32F401RETX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "Delirium-Preventable-Wearable.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"../STM32F401RETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Delirium-Preventable-Wearable.map" -Wl,--gc-sections -static -u _printf_float --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

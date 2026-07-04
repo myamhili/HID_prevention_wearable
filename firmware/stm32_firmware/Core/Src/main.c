@@ -1,7 +1,15 @@
-#include "stdio.h"
-#include "string.h"
-#include "math.h"
-#include "stdlib.h"
+/* Includes ------------------------------------------------------------------*/
+#include "main.h"
+#include "adc.h"
+#include "dma.h"
+#include "gpio.h"
+#include "i2c.h"
+#include "i2c-lcd.h"
+#include "usart.h"
+
+#include <math.h>
+#include <stdio.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -11,10 +19,15 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-const int B_CONST = 4275;
-const float R0_CONST = 100000.0;
-const float ADC_MAX = 4095.0;
+#define B_CONST 4275.0f
+#define R0_CONST 100000.0f
+#define ADC_MAX 4095.0f
 #define RX_BUF_SIZE 100
+#define SENSOR_CHANNEL_COUNT 4U
+#define SENSOR_SEND_INTERVAL_MS 100U
+#define UART_TIMEOUT_MS 100U
+#define LCD_COLUMNS 16U
+#define ERROR_BLINK_DELAY_CYCLES 500000UL
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -25,21 +38,26 @@ const float ADC_MAX = 4095.0;
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-uint16_t adc_buf[4];
+uint16_t adc_buf[SENSOR_CHANNEL_COUNT];
 char tx_buf[100];
 uint8_t rx_char;
 uint8_t rx_buf[RX_BUF_SIZE];
 volatile int rx_idx = 0;
 volatile uint8_t command_ready_flag = 0;
+volatile uint8_t rx_overflow_flag = 0;
 uint32_t lastSendTime = 0;
-const uint32_t sendInterval = 100;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-void sendSensorData(void);
-void parseCommand(char *cmd);
+static void sendSensorData(void);
+static void parseCommand(char *cmd);
+static void sendUartString(const char *message);
+static uint8_t clampRgbValue(int value);
+static void showStartupScreen(void);
+static void lcdSendLine(const char *text);
+static void busyWait(volatile uint32_t cycles);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -81,16 +99,13 @@ int main(void)
   MX_ADC1_Init();
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
-  (void)HAL_I2C_GetState(&hi2c1);
+  if (lcd_init(&hi2c1) != HAL_OK)
+  {
+	  Error_Handler();
+  }
+  showStartupScreen();
 
-  lcd_init(&hi2c1);
-  lcd_set_rgb(0, 100, 255);
-  lcd_set_cursor(0, 0);
-  lcd_send_string("System Online.");
-  lcd_set_cursor(0, 1);
-  lcd_send_string("Waiting for PC...");
-
-  if (HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_buf, 4) != HAL_OK)
+  if (HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_buf, SENSOR_CHANNEL_COUNT) != HAL_OK)
   {
 	  Error_Handler();
   }
@@ -109,7 +124,7 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 	uint32_t now = HAL_GetTick();
-	if (now - lastSendTime >= sendInterval)
+	if (now - lastSendTime >= SENSOR_SEND_INTERVAL_MS)
 	{
 		lastSendTime = now;
 		sendSensorData();
@@ -173,7 +188,7 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-void sendSensorData(void)
+static void sendSensorData(void)
 {
 	uint16_t temp_adc_val = adc_buf[0];
 	uint16_t accel_x_val = adc_buf[1];
@@ -183,19 +198,22 @@ void sendSensorData(void)
 	float temp_C = -99.0;
 	if (temp_adc_val > 0)
 	{
-		float R_thermistor = R0_CONST * (ADC_MAX / (float)temp_adc_val - 1.0);
-		float log_R = log(R_thermistor / R0_CONST);
-		float temp_K = 1.0 / (log_R / B_CONST + 1.0 / 298.15);
-		temp_C = temp_K - 273.15;
+		float R_thermistor = R0_CONST * (ADC_MAX / (float)temp_adc_val - 1.0f);
+		float log_R = logf(R_thermistor / R0_CONST);
+		float temp_K = 1.0f / (log_R / B_CONST + 1.0f / 298.15f);
+		temp_C = temp_K - 273.15f;
 	}
 
 	/* Format the data string to match Arduino format: T:temp,X:x,Y:y,Z:z */
-	int len = sprintf(tx_buf, "T:%.1f,X:%d,Y:%d,Z:%d\n",
+	int len = snprintf(tx_buf, sizeof(tx_buf), "T:%.1f,X:%u,Y:%u,Z:%u\n",
 	                    temp_C,
-	                    (int)accel_x_val,
-	                    (int)accel_y_val,
-	                    (int)accel_z_val);
-	HAL_UART_Transmit(&huart2, (uint8_t*)tx_buf, len, 100);
+	                    (unsigned int)accel_x_val,
+	                    (unsigned int)accel_y_val,
+	                    (unsigned int)accel_z_val);
+	if (len > 0 && len < (int)sizeof(tx_buf))
+	{
+		HAL_UART_Transmit(&huart2, (uint8_t*)tx_buf, (uint16_t)len, UART_TIMEOUT_MS);
+	}
 }
 
 /**
@@ -205,13 +223,13 @@ void sendSensorData(void)
  *   - RGB:r,g,b - Set LCD backlight color
  *   - L:line1|line2 - Display text on LCD (line2 optional)
  */
-void parseCommand(char *cmd)
+static void parseCommand(char *cmd)
 {
 	/* Find the colon separator */
 	char *commandValue = strchr(cmd, ':');
 	if (commandValue == NULL)
 	{
-		HAL_UART_Transmit(&huart2, (uint8_t*)"ERR:Invalid format\n", 20, 100);
+		sendUartString("ERR:Invalid format\n");
 		return;
 	}
 
@@ -226,12 +244,18 @@ void parseCommand(char *cmd)
 		int r, g, b;
 		if (sscanf(commandValue, "%d,%d,%d", &r, &g, &b) == 3)
 		{
-			lcd_set_rgb((uint8_t)r, (uint8_t)g, (uint8_t)b);
-			HAL_UART_Transmit(&huart2, (uint8_t*)"ACK:RGB\n", 9, 100);
+			if (lcd_set_rgb(clampRgbValue(r), clampRgbValue(g), clampRgbValue(b)) == HAL_OK)
+			{
+				sendUartString("ACK:RGB\n");
+			}
+			else
+			{
+				sendUartString("ERR:RGB write failed\n");
+			}
 		}
 		else
 		{
-			HAL_UART_Transmit(&huart2, (uint8_t*)"ERR:RGB parse failed\n", 22, 100);
+			sendUartString("ERR:RGB parse failed\n");
 		}
 	}
 	/* Handle LCD text display command */
@@ -244,7 +268,7 @@ void parseCommand(char *cmd)
 		{
 			/* Only one line of text */
 			lcd_set_cursor(0, 0);
-			lcd_send_string(commandValue);
+			lcdSendLine(commandValue);
 		}
 		else
 		{
@@ -254,15 +278,64 @@ void parseCommand(char *cmd)
 			line2++; /* Move pointer to the start of the second line */
 
 			lcd_set_cursor(0, 0);
-			lcd_send_string(line1);
+			lcdSendLine(line1);
 			lcd_set_cursor(0, 1);
-			lcd_send_string(line2);
+			lcdSendLine(line2);
 		}
-		HAL_UART_Transmit(&huart2, (uint8_t*)"ACK:L\n", 7, 100);
+		sendUartString("ACK:L\n");
 	}
 	else
 	{
-		HAL_UART_Transmit(&huart2, (uint8_t*)"ERR:Unknown command\n", 21, 100);
+		sendUartString("ERR:Unknown command\n");
+	}
+}
+
+static void sendUartString(const char *message)
+{
+	HAL_UART_Transmit(&huart2, (uint8_t*)message, (uint16_t)strlen(message), UART_TIMEOUT_MS);
+}
+
+static uint8_t clampRgbValue(int value)
+{
+	if (value < 0)
+	{
+		return 0;
+	}
+	if (value > 255)
+	{
+		return 255;
+	}
+	return (uint8_t)value;
+}
+
+static void showStartupScreen(void)
+{
+	(void)lcd_set_rgb(0, 100, 255);
+	lcd_clear();
+	lcd_set_cursor(0, 0);
+	lcdSendLine("System Online!");
+	lcd_set_cursor(0, 1);
+	lcdSendLine("Waiting for PC...");
+}
+
+static void lcdSendLine(const char *text)
+{
+	uint8_t chars_written = 0;
+	while (*text != '\0' && chars_written < LCD_COLUMNS)
+	{
+		if (lcd_send_data(*text++) != HAL_OK)
+		{
+			break;
+		}
+		chars_written++;
+	}
+}
+
+static void busyWait(volatile uint32_t cycles)
+{
+	while (cycles-- > 0U)
+	{
+		__NOP();
 	}
 }
 
@@ -274,18 +347,33 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 		{
 			if (rx_idx > 0)
 			{
-				rx_buf[rx_idx] = '\0';
-				command_ready_flag = 1;
+				if (!rx_overflow_flag)
+				{
+					rx_buf[rx_idx] = '\0';
+					command_ready_flag = 1;
+				}
+				else
+				{
+					rx_overflow_flag = 0;
+					rx_idx = 0;
+				}
 			}
 		}
 		else
 		{
-			if (rx_idx < RX_BUF_SIZE - 1)
+			if (!command_ready_flag && !rx_overflow_flag && rx_idx < RX_BUF_SIZE - 1)
 			{
 				rx_buf[rx_idx++] = rx_char;
 			}
+			else if (!command_ready_flag)
+			{
+				rx_overflow_flag = 1;
+			}
 		}
-		HAL_UART_Receive_IT(&huart2, &rx_char, 1);
+		if (HAL_UART_Receive_IT(&huart2, &rx_char, 1) != HAL_OK)
+		{
+			Error_Handler();
+		}
 	}
 }
 /* USER CODE END 4 */
@@ -302,7 +390,7 @@ void Error_Handler(void)
   while (1)
   {
 	  HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-	  HAL_Delay(50);
+	  busyWait(ERROR_BLINK_DELAY_CYCLES);
   }
   /* USER CODE END Error_Handler_Debug */
 }

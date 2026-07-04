@@ -1,6 +1,5 @@
 /**
  * @file R4_Minima_Controller.ino
- * @author Deacon Sham
  * @brief Main firmware for the Delirium Prevention Wearable on an Arduino R4 Minima.
  * @version 2.1
  * @date 2025-11-15
